@@ -82,3 +82,131 @@ llm = VertexAI(
 )
 
 embedding = VertexAIEmbeddings()
+
+def chunks(lst: List[Any], n: int) -> Iterator[List[Any]]:
+    """Yield successive n-sized chunks from lst.
+
+    Args:
+        lst: The list to be chunked.
+        n: The size of each chunk.
+
+    Yields:
+        A list of the next n elements from lst.
+    """
+
+    for i in range(0, len(lst), n):
+        yield lst[i : i + n]
+
+
+def load_docs_from_directory(dir_path: str) -> List[Document]:
+    """Loads a series of docs from a directory.
+
+    Args:
+      dir_path: The path to the directory containing the docs.
+
+    Returns:
+      A list of the docs in the directory.
+    """
+
+    docs = []
+    for file_path in glob.glob(dir_path):
+        loader = TextLoader(file_path)
+        docs = docs + loader.load()
+    return docs
+
+def create_retriever(top_k_results: int, dir_path: str) -> VectorStoreRetriever:
+    """Create a recipe retriever from a list of top results and a list of web pages.
+
+    Args:
+        top_k_results: number of results to return when retrieving
+        dir_path: List of web pages.
+
+    Returns:
+        A recipe retriever.
+    """
+
+    BATCH_SIZE_EMBEDDINGS = 5
+    docs = load_docs_from_directory(dir_path=dir_path)
+    doc_chunk = chunks(docs, BATCH_SIZE_EMBEDDINGS)
+    for (index, chunk) in tqdm(enumerate(doc_chunk)):
+        if index == 0:
+            db = FAISS.from_documents(chunk, embedding)
+        else:
+            db.add_documents(chunk)
+
+    retriever = db.as_retriever(search_kwargs={"k": top_k_results})
+    return retriever
+
+insurance_retriever = create_retriever(top_k_results=2, dir_path="./insurance/*")
+
+@tool(return_direct=True)
+def retrieve_insurances(query: str) -> str:
+    """
+    Searches the insurance catalog to find suitable insurances for the query.
+    Return the output without processing further.
+    """
+    docs = insurance_retriever.get_relevant_documents(query)
+
+    return (
+        f"Here are my recommendations. Select the insurance you would like to explore further about {query}: [START CALLBACK FRONTEND] "
+        + str([doc.metadata for doc in docs])
+        + " [END CALLBACK FRONTEND]"
+    )
+
+@tool
+def insurance_selector(path: str) -> str:
+    """
+    Use this when the user selects a insurance.
+    You will need to respond to the user telling what are the options once a insurance is selected.
+    You can show what the coverage scope and payment amount are.
+    """
+    return "Great choice! I can show you what the coverage scope and payment amount are."
+
+docs = load_docs_from_directory("./insurance/*")
+insurance_detail = {doc.metadata["source"]: doc.page_content for doc in docs}
+
+@tool
+def get_insurance_detail(path: str) -> str:
+    """
+    Use it to find more information for a specific insurance, such as the coverage scope and payment amount.
+    Use this to find what are the coverage scope and payment amount.
+
+    Example output:
+    Coverage Scope:                                                                      Payment Amount:
+    * Accidental Death Benefit or Funeral Expense Benefit                                * Insurance Amount * 100%
+    * Accidental Death Compassion Benefit or Funeral Expense Benefit                     * Insurance Amount * 5%
+    * Water and Land Traffic Accidental Death Benefit or Funeral Expense Benefit         * Insurance Amount * 10%
+    * Aviation Accidental Death Benefit or Funeral Expense Benefit                       * Insurance Amount * 25%
+    * Accidental Disability Benefit                                                      * Insurance Amount * (5% to 100%)
+    * Water and Land Traffic Accidental Disability Benefit                               * Insurance Amount * 10% * (5% to 100%)
+    * Aviation Accidental Disability Benefit                                             * Insurance Amount * 25% * (5% to 100%)
+    * Serious Burns Benefit                                                              * Insurance Amount * 35%
+
+    Would you like me to help you buy this insurance?
+    """
+    try:
+        return insurance_detail[path]
+    except KeyError:
+        return "Could not find the details for this insurance"
+
+memory = ConversationBufferMemory(memory_key="chat_history")
+memory.clear()
+
+tools = [
+    retrieve_insurances,
+    insurance_selector,
+    get_insurance_detail
+]
+agent = initialize_agent(
+    tools,
+    llm,
+    agent=AgentType.CONVERSATIONAL_REACT_DESCRIPTION,
+    memory=memory,
+    verbose=True,
+)
+
+agent.run("I'm going on a 4-day trip to Japan. Can you recommend suitable travel insurance?")
+agent.run("Selecting ./insurance/NTA.txt")
+agent.run("Explain what Accidental Death Benefit is")
+agent.run("Yes,order this insurance for me")
+agent.run("Thank you, that's everything!")
