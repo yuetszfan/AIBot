@@ -156,11 +156,9 @@ def retrieve_insurances(query: str) -> str:
 @tool
 def insurance_selector(path: str) -> str:
     """
-    Use this when the user selects a insurance.
-    You will need to respond to the user telling what are the options once a insurance is selected.
-    You can show what the coverage scope and payment amount are.
+    Use this when the user mentions 'Selecting'.
     """
-    return "Great choice! I can show you what the coverage scope and payment amount are."
+    return "Great choice! I can show you details of this insurance. What aspect are you interested in?"
 
 docs = load_docs_from_directory("./insurance/*")
 insurance_detail = {doc.metadata["source"]: doc.page_content for doc in docs}
@@ -168,26 +166,21 @@ insurance_detail = {doc.metadata["source"]: doc.page_content for doc in docs}
 @tool
 def get_insurance_detail(path: str) -> str:
     """
-    Use it to find more information for a specific insurance, such as the coverage scope and payment amount.
-    Use this to find what are the coverage scope and payment amount.
-
-    Example output:
-    Coverage Scope:                                                                      Payment Amount:
-    * Accidental Death Benefit or Funeral Expense Benefit                                * Insurance Amount * 100%
-    * Accidental Death Compassion Benefit or Funeral Expense Benefit                     * Insurance Amount * 5%
-    * Water and Land Traffic Accidental Death Benefit or Funeral Expense Benefit         * Insurance Amount * 10%
-    * Aviation Accidental Death Benefit or Funeral Expense Benefit                       * Insurance Amount * 25%
-    * Accidental Disability Benefit                                                      * Insurance Amount * (5% to 100%)
-    * Water and Land Traffic Accidental Disability Benefit                               * Insurance Amount * 10% * (5% to 100%)
-    * Aviation Accidental Disability Benefit                                             * Insurance Amount * 25% * (5% to 100%)
-    * Serious Burns Benefit                                                              * Insurance Amount * 35%
-
-    Would you like me to help you buy this insurance?
+    Use this when the user requests details about the specific insurance. For example 'Show me coverage scope of this insurance'
+    Return the specific details the user requests,and then ask 'Would you like me to help you buy this insurance?'
     """
+   
     try:
         return insurance_detail[path]
     except KeyError:
         return "Could not find the details for this insurance"
+
+@tool
+def order_insurance(str):
+    """
+    Use this when the user says 'Yes, order this insurance for me'
+    Return 'OK,I've ordered the insurance. Safe flight and enjoy your trip!'
+    """
 
 memory = ConversationBufferMemory(memory_key="chat_history")
 memory.clear()
@@ -195,7 +188,8 @@ memory.clear()
 tools = [
     retrieve_insurances,
     insurance_selector,
-    get_insurance_detail
+    get_insurance_detail,
+    order_insurance
 ]
 agent = initialize_agent(
     tools,
@@ -205,7 +199,7 @@ agent = initialize_agent(
     verbose=True,
 )
 
-agent.run("I'm going on a 4-day trip to Japan. Can you recommend suitable travel insurance?")
+agent.run("I'm going on a 3-day trip to Japan. Can you recommend suitable travel insurance?")
 agent.run("Selecting ./insurance/NTA.txt")
 agent.run("Explain what Accidental Death Benefit is")
 agent.run("Yes,order this insurance for me")
