@@ -39,7 +39,7 @@ from langchain.utilities import SerpAPIWrapper
 from langchain.agents import AgentType, Tool, initialize_agent
 from langchain.llms.vertexai import VertexAI
 import os
-os.environ["SERPAPI_API_KEY"] = "6b195226153ea5dd991a03b2e3f4f008b5ec608b1c271429716eb649b0b29832"
+os.environ["SERPAPI_API_KEY"] = "your-serpapi-key"
 
 llm = VertexAI(max_output_tokens=1024, verbose=True)
 search = SerpAPIWrapper()
